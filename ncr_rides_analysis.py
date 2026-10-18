@@ -1,418 +1,290 @@
-# ============================================================
-#   NCR Ride Bookings - Data Science & ML Project
-#   Course  : INT234 - Predictive Analytics
-#   Dataset : ncr_ride_bookings.csv
-# ============================================================
+
+# 1. IMPORT LIBRARIES
+import os
+os.environ['LOKY_MAX_CPU_COUNT'] = '1'
 
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-import warnings
-warnings.filterwarnings('ignore')
+import seaborn as sns
 
 from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import LabelEncoder
-from sklearn.linear_model import LinearRegression, LogisticRegression
+from sklearn.preprocessing import StandardScaler
+
+from sklearn.linear_model import LogisticRegression
 from sklearn.tree import DecisionTreeClassifier
+from sklearn.ensemble import RandomForestClassifier
 from sklearn.neighbors import KNeighborsClassifier
-from sklearn.naive_bayes import GaussianNB
-from sklearn.cluster import KMeans
-from sklearn.metrics import accuracy_score, mean_absolute_error, mean_squared_error, r2_score, confusion_matrix
+
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
+from sklearn.metrics import confusion_matrix, classification_report
 
 
-# ============================================================
-# STEP 1 - LOAD DATA
-# ============================================================
 
-print("STEP 1 - Loading Dataset")
-print("-" * 40)
+# 2. LOAD DATASET
 
 df = pd.read_csv('ncr_ride_bookings.csv')
-df.replace('null', np.nan, inplace=True)
 
-print("Shape of dataset:", df.shape)
-print("\nColumn Names:")
-print(df.columns.tolist())
-print("\nFirst 5 rows:")
+
+# 3. BASIC INFORMATION
+
+print("DATASET SHAPE")
+print("Shape:", df.shape)
+
+print("\nFIRST 5 ROWS")
 print(df.head())
-print("\nBasic Statistics:")
+
+print("\nDATA INFO")
+print(df.info())
+
+print("\nSUMMARY STATISTICS")
 print(df.describe())
 
+print("\nDUPLICATE ROWS")
+print("Duplicate Rows:", df.duplicated().sum())
 
-# ============================================================
-# STEP 2 - DATA CLEANING
-# ============================================================
+# Replace 'null' string with real NaN
+df = df.replace('null', np.nan)
 
-print("\nSTEP 2 - Data Cleaning")
-print("-" * 40)
-
-# Check and remove duplicates
-print("Duplicate rows:", df.duplicated().sum())
-df.drop_duplicates(inplace=True)
-print("After removing duplicates:", df.shape)
-
-# Check missing values
-print("\nMissing values before cleaning:")
+print("\nMISSING VALUES BEFORE CLEANING")
 print(df.isnull().sum())
 
-# Drop columns with too many missing values (more than 70%)
-cols_to_drop = ['Cancelled Rides by Customer',
-                'Reason for cancelling by Customer',
-                'Cancelled Rides by Driver',
-                'Driver Cancellation Reason',
-                'Incomplete Rides',
-                'Incomplete Rides Reason']
-df.drop(columns=cols_to_drop, inplace=True)
-print("\nDropped 6 high-missing columns.")
 
-# Convert columns to numeric
-df['Booking Value']   = pd.to_numeric(df['Booking Value'],   errors='coerce')
-df['Ride Distance']   = pd.to_numeric(df['Ride Distance'],   errors='coerce')
-df['Avg VTAT']        = pd.to_numeric(df['Avg VTAT'],        errors='coerce')
-df['Avg CTAT']        = pd.to_numeric(df['Avg CTAT'],        errors='coerce')
-df['Driver Ratings']  = pd.to_numeric(df['Driver Ratings'],  errors='coerce')
-df['Customer Rating'] = pd.to_numeric(df['Customer Rating'], errors='coerce')
+# 4. DATA CLEANING
 
-# Fill missing numeric values with median
-df['Booking Value'].fillna(df['Booking Value'].median(),     inplace=True)
-df['Ride Distance'].fillna(df['Ride Distance'].median(),     inplace=True)
-df['Avg VTAT'].fillna(df['Avg VTAT'].median(),               inplace=True)
-df['Avg CTAT'].fillna(df['Avg CTAT'].median(),               inplace=True)
-df['Driver Ratings'].fillna(df['Driver Ratings'].median(),   inplace=True)
-df['Customer Rating'].fillna(df['Customer Rating'].median(), inplace=True)
+df = df.drop_duplicates()
 
-# Fill missing text with most common value
-df['Payment Method'].fillna(df['Payment Method'].mode()[0], inplace=True)
+ride_distance_original = pd.to_numeric(df['Ride Distance'], errors='coerce')
 
-print("\nMissing values after cleaning:")
-print(df.isnull().sum())
-print("\nFinal dataset shape:", df.shape)
+cols_to_drop = [
+    'Cancelled Rides by Customer',
+    'Reason for cancelling by Customer',
+    'Cancelled Rides by Driver',
+    'Driver Cancellation Reason',
+    'Incomplete Rides',
+    'Incomplete Rides Reason'
+]
+df = df.drop(columns=cols_to_drop)
 
+num_cols = ['Booking Value', 'Ride Distance', 'Avg VTAT', 'Avg CTAT', 'Driver Ratings', 'Customer Rating']
+for col in num_cols:
+    df[col] = pd.to_numeric(df[col], errors='coerce')
+    df[col] = df[col].fillna(df[col].median())
 
-# ============================================================
-# STEP 3 - OBJECTIVES
-# ============================================================
+df['Payment Method'] = df['Payment Method'].fillna(df['Payment Method'].mode()[0])
 
-print("\nSTEP 3 - Project Objectives")
-print("-" * 40)
-print("Objective 1: Predict Booking Status (Completed or Not) - Classification")
-print("Objective 2: Predict Booking Value (fare) - Regression")
-print("Objective 3: Find peak booking hours - EDA")
-print("Objective 4: Find most popular and profitable vehicle type - EDA")
-print("Objective 5: Group customers by ride behavior - Clustering")
-
-
-# ============================================================
-# STEP 4 - EXPLORATORY DATA ANALYSIS (EDA)
-# ============================================================
-
-print("\nSTEP 4 - Exploratory Data Analysis")
-print("-" * 40)
-
-# Plot 1 - Booking Status Distribution
-status = df['Booking Status'].value_counts()
-plt.figure()
-plt.bar(status.index, status.values, color=['green','red','orange','blue','gray'])
-plt.title('Plot 1: Booking Status Distribution')
-plt.xlabel('Booking Status')
-plt.ylabel('Count')
-plt.xticks(rotation=20)
-plt.tight_layout()
-plt.show()
-
-# Plot 2 - Vehicle Type Count (Objective 4)
-vehicle = df['Vehicle Type'].value_counts()
-plt.figure()
-plt.bar(vehicle.index, vehicle.values, color='steelblue')
-plt.title('Plot 2: Vehicle Type Count (Objective 4)')
-plt.xlabel('Vehicle Type')
-plt.ylabel('Count')
-plt.xticks(rotation=15)
-plt.tight_layout()
-plt.show()
-
-# Plot 3 - Booking Value Distribution
-plt.figure()
-plt.hist(df['Booking Value'], bins=30, color='coral', edgecolor='black')
-plt.title('Plot 3: Booking Value Distribution')
-plt.xlabel('Booking Value (INR)')
-plt.ylabel('Frequency')
-plt.tight_layout()
-plt.show()
-
-# Plot 4 - Peak Hours (Objective 3)
 df['Hour'] = pd.to_datetime(df['Time'], format='%H:%M:%S', errors='coerce').dt.hour
-hour_counts = df['Hour'].value_counts().sort_index()
+df['Hour'] = df['Hour'].fillna(df['Hour'].median())
+df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
+df['DayOfWeek'] = df['Date'].dt.dayofweek
+
+print("\n--- MISSING VALUES AFTER CLEANING ---")
+print(df.isnull().sum())
+print("Cleaned Dataset Shape:", df.shape)
+
+# ============================================================
+# PROJECT OBJECTIVES AND WHERE EACH IS ANSWERED
+# Objective 1: Describe the booking-status distribution.
+#              Starts in Section 5, Plot 1.
+# Objective 2: Identify the most frequently booked vehicle type.
+#              Starts in Section 5, Plot 2.
+# Objective 3: Identify peak booking hours.
+#              Starts in Section 5, Plot 3.
+# Objective 4: Explore ride distance, booking value, and numeric
+#              relationships. Starts in Section 5, Plots 4-7.
+# Objective 5: Predict completed vs. not completed bookings.
+#              Starts in Section 6: Classification Models.
+# ============================================================
+
+# ============================================================
+# 5. EXPLORATORY DATA ANALYSIS (EDA)
+# ============================================================
+
+# Objective 1, Plot 1: Booking Status Distribution
 plt.figure()
-plt.bar(hour_counts.index, hour_counts.values, color='purple')
-plt.title('Plot 4: Bookings by Hour of Day - Peak Hours (Objective 3)')
-plt.xlabel('Hour of Day')
+df['Booking Status'].value_counts().plot(kind='pie', autopct='%1.1f%%')
+plt.title('Booking Status Percentage')
+plt.ylabel('')
+plt.show()
+
+# Objective 2, Plot 2: Vehicle Type Count
+plt.figure()
+sns.countplot(data=df, x='Vehicle Type')
+plt.title('Vehicle Type Count')
+plt.xticks(rotation=20)
+plt.show()
+
+# Objective 3, Plot 3: Peak Booking Hours (Hour of Day)
+plt.figure()
+sns.countplot(data=df, x='Hour', color='mediumpurple')
+plt.title('Bookings by Hour of Day (Peak Hours)')
+plt.xlabel('Hour of Day (0 to 23)')
 plt.ylabel('Number of Bookings')
-plt.tight_layout()
 plt.show()
 
-# Plot 5 - Avg Booking Value by Vehicle Type (Objective 4)
-avg_value = df.groupby('Vehicle Type')['Booking Value'].mean().sort_values(ascending=False)
+# Objective 4, Plot 4: Ride Distance Distribution (original non-missing values)
 plt.figure()
-plt.bar(avg_value.index, avg_value.values, color='darkorange')
-plt.title('Plot 5: Avg Booking Value by Vehicle Type (Objective 4)')
-plt.xlabel('Vehicle Type')
-plt.ylabel('Average Booking Value (INR)')
+sns.histplot(x=ride_distance_original.dropna(), bins=30, color='coral')
+plt.title('Ride Distance Distribution')
+plt.show()
+
+# Objective 4, Plot 5: Booking Value vs Booking Status Boxplot
+plt.figure()
+sns.boxplot(data=df, x='Booking Status', y='Booking Value')
+plt.title('Booking Value vs Booking Status')
 plt.xticks(rotation=15)
+plt.show()
+
+# Objective 4, Plot 6: Ride Distance vs Booking Value Scatterplot
+plt.figure()
+sns.scatterplot(data=df, x='Ride Distance', y='Booking Value', alpha=0.3, color='teal')
+plt.title('Ride Distance vs Booking Value')
+plt.show()
+
+# Objective 4, Plot 7: Correlations between numeric variables
+numeric_data = df.select_dtypes(include='number')
+correlation = numeric_data.corr()
+
+plt.figure(figsize=(11, 8))
+sns.heatmap(correlation, annot=True, cmap='coolwarm', fmt='.2f', center=0)
+plt.title('Correlation Heatmap of Numeric Variables')
 plt.tight_layout()
 plt.show()
 
-# Plot 6 - Ride Distance vs Booking Value
+
+# ============================================================
+# Objective- 5 (6. CLASSIFICATION: 4 MACHINE LEARNING MODELS)
+# ============================================================
+
+X = df.drop(['Booking ID', 'Customer ID', 'Date', 'Time', 'Pickup Location',
+             'Drop Location', 'Booking Status'], axis=1)
+
+y = df['Booking Status'].map({
+    'Completed': 1,
+    'Cancelled by Driver': 0,
+    'Cancelled by Customer': 0,
+    'No Driver Found': 0,
+    'Incomplete': 0
+})
+
+X = pd.get_dummies(X, drop_first=True, dtype=int)
+print(X.shape)
+print(y.shape)
+
+# Train-test split
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.2, random_state=42, stratify=y
+)
+print(X_train.shape)
+print(X_test.shape)
+
+# Logistic regression
+scaler = StandardScaler()
+
+X_train_scaled = scaler.fit_transform(X_train)
+X_test_scaled = scaler.transform(X_test)
+
+lr = LogisticRegression(max_iter=1000)
+lr.fit(X_train_scaled, y_train)
+
+y_pred_lr = lr.predict(X_test_scaled)
+
+print("\nLogistic Regression:")
+print("Accuracy:", accuracy_score(y_test, y_pred_lr))
+print("Precision:", precision_score(y_test, y_pred_lr))
+print("Recall:", recall_score(y_test, y_pred_lr))
+print("F1 Score:", f1_score(y_test, y_pred_lr))
+
+# Decision Tree
+dt = DecisionTreeClassifier(max_depth=5, random_state=42)
+dt.fit(X_train, y_train)
+
+y_pred_dt = dt.predict(X_test)
+
+print("\nDecision Tree:")
+print("Accuracy:", accuracy_score(y_test, y_pred_dt))
+print("Precision:", precision_score(y_test, y_pred_dt))
+print("Recall:", recall_score(y_test, y_pred_dt))
+print("F1 Score:", f1_score(y_test, y_pred_dt))
+
+# Random forest
+rf = RandomForestClassifier(n_estimators=50, max_depth=4, random_state=42)
+rf.fit(X_train, y_train)
+
+y_pred_rf = rf.predict(X_test)
+
+print("\nRandom Forest:")
+print("Accuracy:", accuracy_score(y_test, y_pred_rf))
+print("Precision:", precision_score(y_test, y_pred_rf))
+print("Recall:", recall_score(y_test, y_pred_rf))
+print("F1 Score:", f1_score(y_test, y_pred_rf))
+
+# KNN
+knn = KNeighborsClassifier(n_neighbors=5)
+knn.fit(X_train_scaled, y_train)
+
+y_pred_knn = knn.predict(X_test_scaled)
+
+print("\nKNN:")
+print("Accuracy:", accuracy_score(y_test, y_pred_knn))
+print("Precision:", precision_score(y_test, y_pred_knn))
+print("Recall:", recall_score(y_test, y_pred_knn))
+print("F1 Score:", f1_score(y_test, y_pred_knn))
+
+
+# ============================================================
+# 7. ACCURACY COMPARISON & BEST MODEL EVALUATION
+# ============================================================
+# Compare Accuracies with a simple Bar Plot
+models = ['Logistic Reg', 'Decision Tree', 'Random Forest', 'KNN']
+accuracies = [
+    accuracy_score(y_test, y_pred_lr),
+    accuracy_score(y_test, y_pred_dt),
+    accuracy_score(y_test, y_pred_rf),
+    accuracy_score(y_test, y_pred_knn)
+]
+
 plt.figure()
-plt.scatter(df['Ride Distance'], df['Booking Value'], alpha=0.2, s=5, color='navy')
-plt.title('Plot 6: Ride Distance vs Booking Value')
-plt.xlabel('Ride Distance (km)')
-plt.ylabel('Booking Value (INR)')
-plt.tight_layout()
-plt.show()
-
-
-# ============================================================
-# STEP 5 - FEATURE ENGINEERING
-# ============================================================
-
-print("\nSTEP 5 - Feature Engineering")
-print("-" * 40)
-
-# Label encode Vehicle Type
-le = LabelEncoder()
-df['Vehicle_Type_enc'] = le.fit_transform(df['Vehicle Type'])
-
-# Target column: 1 = Completed, 0 = Not Completed
-df['Status_Label'] = df['Booking Status'].apply(lambda x: 1 if x == 'Completed' else 0)
-
-print("Vehicle_Type_enc and Status_Label columns created.")
-print(df[['Vehicle Type', 'Vehicle_Type_enc', 'Booking Status', 'Status_Label']].head(8))
-
-
-# ============================================================
-# STEP 6 - CLASSIFICATION MODELS (Objective 1)
-# ============================================================
-
-print("\nSTEP 6 - Classification Models")
-print("-" * 40)
-print("Goal: Predict whether a ride is Completed (1) or Not (0)")
-
-features = ['Vehicle_Type_enc', 'Ride Distance', 'Hour', 'Avg VTAT']
-df_model = df[features + ['Status_Label']].dropna()
-
-X = df_model[features]
-y = df_model['Status_Label']
-
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-print("Training size:", X_train.shape[0])
-print("Testing size :", X_test.shape[0])
-
-# Model 1 - Logistic Regression
-print("\n--- Model 1: Logistic Regression ---")
-model_lr = LogisticRegression(max_iter=500)
-model_lr.fit(X_train, y_train)
-pred_lr = model_lr.predict(X_test)
-acc_lr = accuracy_score(y_test, pred_lr)
-print("Accuracy:", round(acc_lr * 100, 2), "%")
-print("Confusion Matrix:\n", confusion_matrix(y_test, pred_lr))
-
-# Model 2 - Decision Tree
-print("\n--- Model 2: Decision Tree ---")
-model_dt = DecisionTreeClassifier(max_depth=5, random_state=42)
-model_dt.fit(X_train, y_train)
-pred_dt = model_dt.predict(X_test)
-acc_dt = accuracy_score(y_test, pred_dt)
-print("Accuracy:", round(acc_dt * 100, 2), "%")
-print("Confusion Matrix:\n", confusion_matrix(y_test, pred_dt))
-
-# Model 3 - KNN
-print("\n--- Model 3: K-Nearest Neighbors (k=5) ---")
-model_knn = KNeighborsClassifier(n_neighbors=5)
-model_knn.fit(X_train, y_train)
-pred_knn = model_knn.predict(X_test)
-acc_knn = accuracy_score(y_test, pred_knn)
-print("Accuracy:", round(acc_knn * 100, 2), "%")
-print("Confusion Matrix:\n", confusion_matrix(y_test, pred_knn))
-
-# Model 4 - Naive Bayes
-print("\n--- Model 4: Naive Bayes ---")
-model_nb = GaussianNB()
-model_nb.fit(X_train, y_train)
-pred_nb = model_nb.predict(X_test)
-acc_nb = accuracy_score(y_test, pred_nb)
-print("Accuracy:", round(acc_nb * 100, 2), "%")
-print("Confusion Matrix:\n", confusion_matrix(y_test, pred_nb))
-
-
-# Classification Comparison Bar Chart
-model_names = ['Logistic Regression', 'Decision Tree', 'KNN', 'Naive Bayes']
-accuracies  = [acc_lr, acc_dt, acc_knn, acc_nb]
-
-plt.figure()
-plt.bar(model_names, accuracies, color=['blue', 'green', 'orange', 'red'])
-plt.title('Classification Models - Accuracy Comparison')
-plt.xlabel('Model')
+plt.bar(models, accuracies, color=['blue', 'green', 'orange', 'red'])
+plt.title('Classification Models Accuracy Comparison')
+plt.xlabel('Models')
 plt.ylabel('Accuracy')
-plt.ylim(0, 1.1)
-for i, v in enumerate(accuracies):
-    plt.text(i, v + 0.01, str(round(v * 100, 1)) + '%', ha='center')
-plt.xticks(rotation=10)
-plt.tight_layout()
 plt.show()
 
-best_cls = model_names[accuracies.index(max(accuracies))]
-print("\nBest Classification Model:", best_cls,
-      "| Accuracy:", round(max(accuracies) * 100, 2), "%")
+# Best Model Evaluation: Random Forest has the strongest scores from your results
+print("\n==============================================")
+print("BEST-FIT MODEL EVALUATION: RANDOM FOREST")
+print("==============================================")
+print("Accuracy :", accuracy_score(y_test, y_pred_rf))
+print("Precision:", precision_score(y_test, y_pred_rf))
+print("Recall   :", recall_score(y_test, y_pred_rf))
+print("F1 Score :", f1_score(y_test, y_pred_rf))
+
+print("\nConfusion Matrix:")
+print(confusion_matrix(y_test, y_pred_rf))
+
+print("\nClassification Report:")
+print(classification_report(y_test, y_pred_rf))
 
 
-# ============================================================
-# STEP 7 - REGRESSION MODELS (Objective 2)
-# ============================================================
+# Plot Confusion Matrix
 
-print("\nSTEP 7 - Regression Models")
-print("-" * 40)
-print("Goal: Predict Booking Value for completed rides")
+cm = confusion_matrix(y_test, y_pred_rf)
 
-df_reg = df[df['Booking Status'] == 'Completed'].copy()
-df_reg = df_reg[['Ride Distance', 'Vehicle_Type_enc', 'Hour', 'Booking Value']].dropna()
+plt.figure(figsize=(6, 4))
+sns.heatmap(cm, annot=True, fmt='d', cmap='Blues',)
 
-X_r = df_reg[['Ride Distance', 'Vehicle_Type_enc', 'Hour']]
-y_r = df_reg['Booking Value']
-
-X_r_train, X_r_test, y_r_train, y_r_test = train_test_split(X_r, y_r, test_size=0.2, random_state=42)
-print("Training size:", X_r_train.shape[0])
-print("Testing size :", X_r_test.shape[0])
-
-# Reg Model 1 - Simple Linear Regression
-print("\n--- Reg Model 1: Simple Linear Regression ---")
-slr = LinearRegression()
-slr.fit(X_r_train[['Ride Distance']], y_r_train)
-pred_slr = slr.predict(X_r_test[['Ride Distance']])
-mae_slr  = round(mean_absolute_error(y_r_test, pred_slr), 2)
-rmse_slr = round(np.sqrt(mean_squared_error(y_r_test, pred_slr)), 2)
-r2_slr   = round(r2_score(y_r_test, pred_slr), 4)
-print("MAE :", mae_slr)
-print("RMSE:", rmse_slr)
-print("R2  :", r2_slr)
-
-# Reg Model 2 - Multiple Linear Regression
-print("\n--- Reg Model 2: Multiple Linear Regression ---")
-mlr = LinearRegression()
-mlr.fit(X_r_train, y_r_train)
-pred_mlr = mlr.predict(X_r_test)
-mae_mlr  = round(mean_absolute_error(y_r_test, pred_mlr), 2)
-rmse_mlr = round(np.sqrt(mean_squared_error(y_r_test, pred_mlr)), 2)
-r2_mlr   = round(r2_score(y_r_test, pred_mlr), 4)
-print("MAE :", mae_mlr)
-print("RMSE:", rmse_mlr)
-print("R2  :", r2_mlr)
-print("Coefficients:", mlr.coef_)
-
-# Regression Comparison
-reg_names = ['Simple Linear Reg', 'Multiple Linear Reg']
-mae_vals  = [mae_slr, mae_mlr]
-
-plt.figure()
-plt.bar(reg_names, mae_vals, color=['blue', 'green'])
-plt.title('Regression Models - MAE Comparison (lower is better)')
-plt.xlabel('Model')
-plt.ylabel('MAE')
-for i, v in enumerate(mae_vals):
-    plt.text(i, v + 0.5, str(v), ha='center')
-plt.tight_layout()
-plt.show()
-
-best_reg = reg_names[mae_vals.index(min(mae_vals))]
-print("\nBest Regression Model:", best_reg)
-
-
-# ============================================================
-# STEP 8 - CLUSTERING - K-Means (Objective 5)
-# ============================================================
-
-print("\nSTEP 8 - K-Means Clustering")
-print("-" * 40)
-print("Goal: Group customers by ride behavior")
-
-df_cluster = df[['Booking Value', 'Ride Distance', 'Customer Rating']].dropna().copy()
-print("Clustering dataset size:", df_cluster.shape)
-
-# Elbow Method
-wcss = []
-for k in range(2, 9):
-    km = KMeans(n_clusters=k, random_state=42, n_init=10)
-    km.fit(df_cluster)
-    wcss.append(km.inertia_)
-
-plt.figure()
-plt.plot(range(2, 9), wcss, marker='o', color='blue')
-plt.title('Elbow Method - Find Best Number of Clusters')
-plt.xlabel('Number of Clusters (k)')
-plt.ylabel('WCSS')
-plt.tight_layout()
-plt.show()
-
-# Apply K-Means with k=3
-km_final = KMeans(n_clusters=3, random_state=42, n_init=10)
-df_cluster['Cluster'] = km_final.fit_predict(df_cluster)
-
-print("\nCluster sizes:")
-print(df_cluster['Cluster'].value_counts())
-print("\nCluster averages:")
-print(df_cluster.groupby('Cluster').mean().round(2))
-
-# Cluster Plot
-plt.figure()
-colors = ['red', 'blue', 'green']
-for i in range(3):
-    c = df_cluster[df_cluster['Cluster'] == i]
-    plt.scatter(c['Ride Distance'], c['Booking Value'],
-                s=5, alpha=0.3, color=colors[i], label='Cluster ' + str(i))
-plt.title('Customer Clusters - Distance vs Booking Value (Objective 5)')
-plt.xlabel('Ride Distance (km)')
-plt.ylabel('Booking Value (INR)')
-plt.legend()
-plt.tight_layout()
+plt.title('Random Forest Confusion Matrix')
+plt.xlabel('Predicted Booking Status')
+plt.ylabel('Actual Booking Status')
 plt.show()
 
 
-# ============================================================
-# STEP 9 - FINAL SUMMARY & CONCLUSIONS
-# ============================================================
+# FINAL CONCLUSION
 
-print("\n" + "=" * 60)
-print("FINAL SUMMARY & CONCLUSIONS")
-print("=" * 60)
+# The analysis covers booking status, vehicle popularity, peak hours,
+# ride-distance/fare patterns, and correlations between numeric variables.
+# In the scores shared for the current run, Random Forest was the best overall:
+# Accuracy = 98.40%, Precision = 97.85%, Recall = 99.61%, F1 = 98.72%.
+# Recheck these values against the latest run before including them in a report.
 
-print("\n--- Classification Results ---")
-for i in range(len(model_names)):
-    print(f"  {model_names[i]:22s} | Accuracy: {round(accuracies[i]*100, 2)}%")
-print("  Best Model:", best_cls)
-
-print("\n--- Regression Results ---")
-print(f"  {'Simple Linear Reg':22s} | MAE: {mae_slr} | R2: {r2_slr}")
-print(f"  {'Multiple Linear Reg':22s} | MAE: {mae_mlr} | R2: {r2_mlr}")
-print("  Best Model:", best_reg)
-
-print("\n--- Clustering Results ---")
-print("  3 customer groups identified:")
-print("  Cluster 0 = Budget riders  (short distance, low fare)")
-print("  Cluster 1 = Regular riders (medium distance, medium fare)")
-print("  Cluster 2 = Premium riders (long distance, high fare)")
-
-print("""
---- Key Findings ---
-  1. 62% of rides are Completed
-  2. Auto is the most booked vehicle type
-  3. Peak hours are 8-10 AM and 5-8 PM
-  4. Premier Sedan has the highest average booking value
-  5. UPI is the most used payment method
-
---- Recommendations ---
-  1. Add more drivers during peak hours (8-10 AM, 5-8 PM)
-  2. Promote premium vehicles to high-value customers
-  3. Use Decision Tree model to predict ride completion
-""")
-
-print("Project Complete!")
