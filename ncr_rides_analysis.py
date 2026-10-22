@@ -168,6 +168,11 @@ y = df['Booking Status'].map({
 })
 
 X = pd.get_dummies(X, drop_first=True, dtype=int)
+# Remove rows whose booking status was not included in the target mapping.
+valid_target = y.notna()
+X = X.loc[valid_target]
+y = y.loc[valid_target].astype(int)
+
 print(X.shape)
 print(y.shape)
 
