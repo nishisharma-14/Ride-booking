@@ -242,12 +242,21 @@ print("F1 Score:", f1_score(y_test, y_pred_knn))
 # ============================================================
 # Compare Accuracies with a simple Bar Plot
 models = ['Logistic Reg', 'Decision Tree', 'Random Forest', 'KNN']
-accuracies = [
-    accuracy_score(y_test, y_pred_lr),
-    accuracy_score(y_test, y_pred_dt),
-    accuracy_score(y_test, y_pred_rf),
-    accuracy_score(y_test, y_pred_knn)
-]
+predictions = [y_pred_lr, y_pred_dt, y_pred_rf, y_pred_knn]
+model_metrics = []
+for model_name, prediction in zip(models, predictions):
+    model_metrics.append({
+        'Model': model_name,
+        'Accuracy': accuracy_score(y_test, prediction),
+        'Precision': precision_score(y_test, prediction, zero_division=0),
+        'Recall': recall_score(y_test, prediction, zero_division=0),
+        'F1 Score': f1_score(y_test, prediction, zero_division=0)
+    })
+
+metrics_table = pd.DataFrame(model_metrics)
+print("\nMODEL PERFORMANCE COMPARISON")
+print(metrics_table.round(4).to_string(index=False))
+accuracies = metrics_table['Accuracy'].tolist()
 
 plt.figure()
 plt.bar(models, accuracies, color=['blue', 'green', 'orange', 'red'])
