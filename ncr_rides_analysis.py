@@ -265,30 +265,35 @@ plt.xlabel('Models')
 plt.ylabel('Accuracy')
 plt.show()
 
-# Best Model Evaluation: Random Forest has the strongest scores from your results
+best_index = metrics_table['F1 Score'].idxmax()
+best_model_name = models[best_index]
+best_prediction = predictions[best_index]
+best_metrics = metrics_table.iloc[best_index]
+
+# Evaluate the model with the highest F1 score from this run.
 print("\n==============================================")
-print("BEST-FIT MODEL EVALUATION: RANDOM FOREST")
+print("BEST-FIT MODEL EVALUATION:", best_model_name)
 print("==============================================")
-print("Accuracy :", accuracy_score(y_test, y_pred_rf))
-print("Precision:", precision_score(y_test, y_pred_rf))
-print("Recall   :", recall_score(y_test, y_pred_rf))
-print("F1 Score :", f1_score(y_test, y_pred_rf))
+print("Accuracy :", best_metrics['Accuracy'])
+print("Precision:", best_metrics['Precision'])
+print("Recall   :", best_metrics['Recall'])
+print("F1 Score :", best_metrics['F1 Score'])
 
 print("\nConfusion Matrix:")
-print(confusion_matrix(y_test, y_pred_rf))
+print(confusion_matrix(y_test, best_prediction))
 
 print("\nClassification Report:")
-print(classification_report(y_test, y_pred_rf))
+print(classification_report(y_test, best_prediction))
 
 
 # Plot Confusion Matrix
 
-cm = confusion_matrix(y_test, y_pred_rf)
+cm = confusion_matrix(y_test, best_prediction)
 
 plt.figure(figsize=(6, 4))
 sns.heatmap(cm, annot=True, fmt='d', cmap='Blues',)
 
-plt.title('Random Forest Confusion Matrix')
+plt.title(best_model_name + ' Confusion Matrix')
 plt.xlabel('Predicted Booking Status')
 plt.ylabel('Actual Booking Status')
 plt.show()
@@ -298,7 +303,6 @@ plt.show()
 
 # The analysis covers booking status, vehicle popularity, peak hours,
 # ride-distance/fare patterns, and correlations between numeric variables.
-# In the scores shared for the current run, Random Forest was the best overall:
-# Accuracy = 98.40%, Precision = 97.85%, Recall = 99.61%, F1 = 98.72%.
-# Recheck these values against the latest run before including them in a report.
+# The best model is selected from the current run using its F1 score; check the
+# printed model comparison and evaluation results for the measured conclusion.
 
